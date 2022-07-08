@@ -8,6 +8,8 @@ import app from "./config/express";
 
 Arranger({
   esHost: process.env.ES_HOST,
+  esUser: process.env.ES_USER,
+  esPass: process.env.ES_PASS,
   // Maybe the following could come in handy later on...
   /*getServerSideFilter: () => ({
     op: 'not',
