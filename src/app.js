@@ -1,21 +1,24 @@
-import express from "express";
+import bodyParser from 'body-parser';
+import cors from 'cors';
+import express from 'express';
+import session from 'express-session';
+import Keycloak from 'keycloak-connect';
+
+import logger from './config/logger';
 import {
-  logsRequestInterceptor,
   authClientId,
   authRealm,
   authServerUrl,
-  sessionSecret,
+  logsRequestInterceptor,
   secure,
-} from "./vars";
-import logger from "./logger";
-import bodyParser from "body-parser";
-import Keycloak from "keycloak-connect";
-import cors from "cors";
-import session from "express-session";
-import statistics from "../controllers/statistics";
-import requestAccessByStudyId from "../controllers/requestAccess";
-import downloadManifestByStudyId from "../controllers/downloadManifest";
-import { getPermissions, isPermissionGranted } from "../services/keycloak";
+  sessionSecret,
+} from './config/vars';
+import downloadManifestByStudyId from './controllers/downloadManifest';
+import requestAccessByStudyId from './controllers/requestAccess';
+import statistics from './controllers/statistics';
+import { getSuggestions } from './queries/elasticsearch';
+import { SUGGESTIONS_TYPES } from './services/elasticsearch';
+import { getPermissions, isPermissionGranted } from './services/keycloak';
 
 /**
  * N.B.: The memory store is not scalable and the documentation states that there is a memory leak.
@@ -26,7 +29,7 @@ const memoryStore = new session.MemoryStore();
 
 const app = express();
 
-app.use(bodyParser.json({ limit: "4MB" }));
+app.use(bodyParser.json({ limit: '4MB' }));
 app.use(cors());
 
 app.use(
@@ -35,13 +38,13 @@ app.use(
     resave: false,
     saveUninitialized: true,
     store: memoryStore,
-  })
+  }),
 );
 
 // Request Logging Interceptor
-if (logsRequestInterceptor === "true") {
+if (logsRequestInterceptor === 'true') {
   app.use((req, res, next) => {
-    logger.info("REQ: ", req.body);
+    logger.info('REQ: ', req.body);
     next();
   });
 }
@@ -65,31 +68,35 @@ if (true === secure) {
     next();
   });
 
-  app.use("/cqdg/graphql", keycloak.protect(), (req, res, next) => {
+  app.use('/cqdg/graphql', keycloak.protect(), (req, res, next) => {
     next();
   });
 
-
   //--------------------------------- Permission Proof of Concept
   const testPermissions = async (req, res, next) => {
-    try{
-      const permissions = await getPermissions(
-          req.kauth.grant.access_token.token
-      );
+    try {
+      const permissions = await getPermissions(req.kauth.grant.access_token.token);
 
       if (isPermissionGranted(permissions, req.params.fileId)) {
-        res.status(200).json({ access: "granted" });
+        res.status(200).json({ access: 'granted' });
       } else {
         return keycloak.accessDenied(req, res, next);
       }
-    }catch(err){
+    } catch (err) {
       return keycloak.accessDenied(req, res, next);
     }
   };
 
-  app.get("/files/:fileId", testPermissions);
+  app.get('/files/:fileId', testPermissions);
   app.get('/request/access/:studyId', requestAccessByStudyId);
   app.get('/request/manifest/:studyId', downloadManifestByStudyId);
+
+  app.get('/genesFeature/suggestions/:prefix', (req, res) =>
+    getSuggestions(req, res, SUGGESTIONS_TYPES.GENE),
+  );
+  app.get('/variantsFeature/suggestions/:prefix', (req, res) =>
+    getSuggestions(req, res, SUGGESTIONS_TYPES.VARIANT),
+  );
 
   // Using the keycloak.enforcer, we cannot dynamically pass the resource
   /*app.get(
@@ -105,6 +112,6 @@ if (true === secure) {
 }
 
 // Routes
-app.get("/stats", statistics);
+app.get('/stats', statistics);
 
 export default app;

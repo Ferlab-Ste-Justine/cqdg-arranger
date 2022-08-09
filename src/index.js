@@ -4,7 +4,7 @@ import "regenerator-runtime/runtime";
 import Arranger from "@arranger/server";
 import { port, env } from "./config/vars";
 import logger from "./config/logger";
-import app from "./config/express";
+import app from "./app";
 
 Arranger({
   esHost: process.env.ES_HOST,
